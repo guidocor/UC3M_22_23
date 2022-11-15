@@ -39,7 +39,7 @@ summary(df)
 Como podemos observar esta base de datos está incomprensible. Las palabras con acentos no se _parsean_ correctamente. Esto es debido a que R no conoce la codificación estándard  y hay que especificarsela dándole el argumento a la función read.csv() de encoding con valor "UTF-8"
 
 ```{r}
-df <- read.csv("./data/datos_2021.csv", encoding = "UTF-8") 
+df <- read.csv("./data/datos_2021.csv",fileEncoding = "UTF-8")
 
 head(df)
 summary(df)
@@ -117,7 +117,7 @@ skim(df)
 
 ## Edades
 
-Ahora queremo observar si en general somos buenos adivinando edades o no. Las edades reales de las personas que han  visto son las siguientes
+Ahora queremos observar si en general somos buenos adivinando edades o no. Las edades reales de las personas que han  visto son las siguientes
 
 e1 20 años https://faces.mpdl.mpg.de/imeji/collection/IXTdg721TwZwyZ8e/item/tBGQ7n8JXWq023eP?q=&fq=&filter=&pos=56#pageTitle
 ![edad 20](./faces/1.png)
@@ -135,15 +135,26 @@ e5 70 años https://faces.mpdl.mpg.de/imeji/collection/IXTdg721TwZwyZ8e/item/S_Q
 Con esta información podemos calcular la diferencia entre la estimación y la realidad. Para ello usaremos una fórmula para restar la edad real a la edad que estimamos. Modifica este código para averiguar el error que se comete con cada uno de las imágenes. Habrá que tener en cuenta que algunas de nuestras variables pueden tener valores no numéricos. Para ello tendrás que convertir en "numeric" las variables que no lo sean y crear nuevas variables donde restes la edad real a la edad estimada (df$e1_q, por ejemplo).
 
 ```{r}
-
-df$e4_q <- 
+class(df$e1_q)
+class(df$e2_q)
+class(df$e3_q)
+class(df$e4_q)
+class(df$e5_q)
+## Observamos que la df$e4_q es integer y no numerica
 df$e4_q
+## Observamos que tiene un valor no numerico ("Holi"). Lo convertimos en NA. Creamos otra variable para no perder la original
+df$e4_numerica[df$e4=="Holi"]<-NA
 
-df$e1_error 
-df$e2_error
-df$e3_error
-df$e4_error
-df$e5_error
+df$e4_numerica <- as.integer(df$e4)
+df$e4_numerica
+class(df$e4_numerica)
+
+
+df$e1_error <- abs(df$e1_q - 20)
+df$e2_error <- abs(df$e2_q - 25)
+df$e3_error <- abs(df$e3_q - 77)
+df$e4_error <- abs(df$e4_q - 45)
+df$e5_error <- abs(df$e5_q - 70)
 
 
 summary(df$e1_q)
@@ -158,8 +169,11 @@ Con estas nuevas variables podemos llevar a cabo una regresión para poder estim
 ```{r}
 
 
+#install.packages("e1071")
+# NO library(e1071)
+## NO reg.lineal<- lm(v1_e ~ e1_error, data=df)  
 
-m1 <- lm()
+m1 <- lm(e1_error ~ v1_e, df)
 summary(m1) 
 
 
@@ -168,8 +182,8 @@ summary(m1)
 Si no has encontrado una relación significativa puedes explorar con un pqueño gráfico la relación entre la variable v1_e y e1_error para ver hasta que punto podemos relacionar la seguridad de las evaluaciones con la precisión de las mismas 
 
 ```{r}
-plot()
-cor()
+plot(df$v1_e, df$e1_error)
+cor(df$v1_e, df$e1_error)
 ```
 
 Con este error calculado podemos llevar a cabo otros cálculos interesantes como por ejemplo el error cuadrático medio. Recuerda que en estadística nos interesa el error porque es cuánto falla nuestro modelo haciendo predicciones. El error cuadrático medio (RMSE en inglés) es la raíz cuadrada del valor absoluto del error al cuadrado. 
@@ -178,6 +192,8 @@ La fórmula es la siguiente: `rmse = sqrt(mean((valor_real -  valor_predicho)^2)
 
 ```{r}
 
+sqrt(mean(df$e1_error^2))
+sqrt(mean(df$e2_error^2))
 
 
 ```
@@ -188,8 +204,8 @@ Ahora que conocemos esta lógica podemos crear una función que nos entregue el 
 
 rmse <- function(x)
 {
-  
-
+  sqrt(mean(x^2))
+## no controla los NAs
 }
 
 rmse(df$e1_error)
