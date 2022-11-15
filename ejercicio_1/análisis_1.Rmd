@@ -30,7 +30,7 @@ Primero de todo querremos abrir nuestro fichero
 # es un tipo de archivo de texto plano que es fácil compartir 
 # ya que no depende de estándares privativos 
 
-df <- read.csv("./data/datos_2021.csv") 
+df <- read.csv("./data/datos_2021.csv")
 
 head(df)
 summary(df)
@@ -38,8 +38,10 @@ summary(df)
 ```
 Como podemos observar esta base de datos está incomprensible. Las palabras con acentos no se _parsean_ correctamente. Esto es debido a que R no conoce la codificación estándard  y hay que especificarsela dándole el argumento a la función read.csv() de encoding con valor "UTF-8"
 
+
 ```{r}
-df <- read.csv("./data/datos_2021.csv", encoding = "UTF-8") 
+df <- read.csv("./data/datos_2021.csv", encoding = "UTF-8")
+
 
 head(df)
 summary(df)
@@ -52,7 +54,7 @@ Antes de continuar, tenemos que asegurarnos que nuestra base de datos está usab
 ```{r}
 
 # Primero de todo necesitamos paquetes. Este código instalará los paquetes que usaremos. 
-if (!require('pacman')) install.packages('pacman'); library('pacman') 
+if (!require('pacman')) install.packages('pacman'); library('pacman') #es para que si no está instalado te lo instale, el punto y coma es para que te lo separe en lineas
 pacman::p_load(janitor, skimr) 
 
 # los :: indican a R que tiene que usar la función del paquete 
@@ -96,6 +98,7 @@ table(df$a3_)
 ```
 
 Esto ha sido fácil, pero iréis viendo que a medida que se complejizan la preguntas, tambien lo hacen la forma de obtener respuestas. ¿Por ejemplo, cómo convertir las variables categóricas relacionadas con vuestra opinión sobre la estadística en numéricas? Utiliza la variable x_s1 y conviertela en una variable numerica ordenando los valores del factor y después convirtiendolos en numerico
+df$x_s1
 
 ```{r}
 
@@ -134,21 +137,58 @@ e5 70 años https://faces.mpdl.mpg.de/imeji/collection/IXTdg721TwZwyZ8e/item/S_Q
 
 Con esta información podemos calcular la diferencia entre la estimación y la realidad. Para ello usaremos una fórmula para restar la edad real a la edad que estimamos. Modifica este código para averiguar el error que se comete con cada uno de las imágenes. Habrá que tener en cuenta que algunas de nuestras variables pueden tener valores no numéricos. Para ello tendrás que convertir en "numeric" las variables que no lo sean y crear nuevas variables donde restes la edad real a la edad estimada (df$e1_q, por ejemplo).
 
+
 ```{r}
 
-df$e4_q <- 
+sapply(df$e4,class)
+sapply(df$e1,class)
+sapply(df$e2,class)
+sapply(df$e3,class)
+sapply(df$e5,class)
+
+df$e4[df$e4=="Holi"]<-NA
+df$e4_num<-as.numeric(df$e4)
+class(df$e4_num)
+
+df$e4_q <- (df$e4_num-45)
 df$e4_q
 
-df$e1_error 
-df$e2_error
-df$e3_error
-df$e4_error
-df$e5_error
 
+df$e1_q <- (df$e1-20)
+df$e1_q
+
+df$e2_q <- (df$e2-25)
+df$e2_q
+
+df$e3_q <- (df$e3-77)
+df$e3_q
+
+df$e5_q <- (df$e5-70)
+df$e5_q
+
+library(plotrix)
+
+df$e1_error <- abs(df$e1_q)
+df$e2_error <- abs(df$e2_q)
+df$e3_error <- abs(df$e3_q)
+df$e4_error <- abs(df$e4_q)
+df$e5_error <- abs(df$e5_q)
 
 summary(df$e1_q)
 summary(df$e1_error)
 hist(df$e1_error)
+summary(df$e2_q)
+summary(df$e2_error)
+hist(df$e2_error)
+summary(df$e3_q)
+summary(df$e3_error)
+hist(df$e3_error)
+summary(df$e4_q)
+summary(df$e4_error)
+hist(df$e4_error)
+summary(df$e5_q)
+summary(df$e5_error)
+hist(df$e5_error)
 
 ```
 
@@ -156,20 +196,31 @@ Con estas nuevas variables podemos llevar a cabo una regresión para poder estim
 
 
 ```{r}
+summary(df$v1_e)
+df$a1_hombre<-df$a1_g
+df$a1_hombre[df$a1_hombre=="Mujer"]<-0
+df$a1_hombre[df$a1_hombre=="Hombre"]<-1
+df$a1_hombre[df$a1_hombre=="Prefiero no decirlo"]<-NA
+df$a1_hombre<-factor(df$a1_hombre,
+                     levels=c(0,1),
+                     labels=c("mujer","hombre"))
+summary(df$a1_hombre)
+summary(df$a2_e)
 
-
-
-m1 <- lm()
+#install.packages("e1071")
+library(e1071)
+m1 <- lm(e1_error ~ v1_e+a1_hombre+a2_e, data=df)
 summary(m1) 
 
 
 ```
 
-Si no has encontrado una relación significativa puedes explorar con un pqueño gráfico la relación entre la variable v1_e y e1_error para ver hasta que punto podemos relacionar la seguridad de las evaluaciones con la precisión de las mismas 
+Si no has encontrado una relación significativa puedes explorar con un pequeño gráfico la relación entre la variable v1_e y e1_error para ver hasta que punto podemos relacionar la seguridad de las evaluaciones con la precisión de las mismas 
 
 ```{r}
-plot()
-cor()
+
+plot(df$v1_e,df$e1_error)
+cor(df$v1_e,df$e1_error)
 ```
 
 Con este error calculado podemos llevar a cabo otros cálculos interesantes como por ejemplo el error cuadrático medio. Recuerda que en estadística nos interesa el error porque es cuánto falla nuestro modelo haciendo predicciones. El error cuadrático medio (RMSE en inglés) es la raíz cuadrada del valor absoluto del error al cuadrado. 
@@ -178,7 +229,7 @@ La fórmula es la siguiente: `rmse = sqrt(mean((valor_real -  valor_predicho)^2)
 
 ```{r}
 
-
+sqrt(mean((df$e1_error)^2))
 
 ```
 
@@ -188,10 +239,14 @@ Ahora que conocemos esta lógica podemos crear una función que nos entregue el 
 
 rmse <- function(x)
 {
-  
-
+y<-sqrt(mean((x)^2))
+return(y)
 }
 
 rmse(df$e1_error)
+rmse(df$e2_error)
+rmse(df$e3_error)
+rmse(df$e4_error)
+rmse(df$e5_error)
 
 ```
