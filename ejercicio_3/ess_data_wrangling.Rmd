@@ -1,0 +1,351 @@
+---
+title: "ess_data_wrangling"
+author: "GC & JL"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ESS
+En este ejercicio vamos a trabajar con una base de datos grande: la ESS en su último edición disponible, 2018. Primero de todo vamos a cargar nuestros paquetes y nuestros datos. En general veremos que los datos vienen en formatos ajenos a R y muchas veces, en formatos cerrados. Algunos de los más frecuentes vienen en la siguiente tabla
+
+| Formato |  Extension  |  Descripcion                         |
+|---------|-------------|--------------------------------------|
+| Plano   | csv         | Archivo de datos separados por comas |   
+| SPSS    | sav         | Variables y etiquetas               |   
+| Excel   | xlsx        | Etiquetas                            |
+| RData   | Rdata       | Objetos de R                         |  
+
+
+En este caso nuestros datos están en el formato propietario de SPSS. Debemos primero de todo abrirlos usando el paquete `haven`. A lo largo del curso iremos incorporando otros ficheros para que veáis ejemplos diferentes. 
+
+
+```{r,  message=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, haven)
+
+library(haven)
+ESS10 <- read_dta("data/ESS10.dta/ESS10.dta") #formato de STATA
+
+```
+
+Escogemos una selección de variables en función de la pregunta que queremos contestar
+
+```{r}
+df <- ESS10 %>% 
+  dplyr::select(country = cntry, gender = gndr, health, happy, id= idno,news=nwspol, internet=netusoft,polintr,cptppola,trstplt,trstprt, trstsci,
+                 vote, trstprl,lrscale,stfdem,stfhlth,stfedu,freehms, 
+                 hmsacld,atcherp,agea, education=edulvlb, unemployd = uempla,
+                 partnr_educ=edulvlpb,)
+```
+
+Entendemos qué significan cada una de las variables? No, pues entonces acudid al "codebook"
+de la base de datos para entenderlo. Algunas tienen nombres bastante intuitivos, otras no tanto. A estas últimas podemos renombrarlas antes de seleccionarlas e incluirlas en nuestro
+dataframe particular. 
+
+A continuación, podemos utilizar otro paquete que nos da una impresión más precisa
+
+```{r}
+pacman::p_load(skimr)
+
+df %>% skim
+```
+Como vemos aplicarla, nos da problemas. El formato de las columnas no es normal. Hay que darles el formato más adecuado. Tenemos que `happy` y `health` son numéricas, mientras que `gender` y `country` son las etiquetas que vienen como atributos. Podemos acceder a ellas con `attr(df_swb$country, "labels")`. En vez de convertir cada factor individualmente tras una búsqueda en Google de ["how to manage R labelled data"](https://www.google.com/search?client=firefox-b-d&q=how+to+manage+R+labelled+data) encontramos el paquete [sjlabelled](https://strengejacke.github.io/sjlabelled/reference/as_label.html). Ahora queremos convertir la columna country en las etiquetas de la columna country. Para ello, entra en juego otro conocido del tidyverse, `mutate()`. Esta función creará nuevas columnas con información del data frame. Para ello, tendrás que indicarle la operación que quieras realizar. En este caso, nosotros, queremos realizar el aplicar `as_label()` a la misma columna. Para ver que hemos tenido éxito, podemos pasar a comprobar cuantos casos encontramos por cada país. 
+
+```{r}
+sapply(df, class)
+
+pacman::p_load(sjlabelled)
+
+df <- df %>% mutate(country = as_label(country), gender = as_label(gender) )
+
+```
+
+Sin embargo no es la única opción disponible. También puedes realizar cualquier operación matemática. Vamos a probar a efectuar un escalamiento con la función `scale()` y un centrado de la variable `health`
+
+```{r}
+
+df <- df %>% mutate(happy_scaled = scale(happy), 
+                            health_centered = health - mean(health) )
+```
+
+Ahora observa el resultado de health_centered. Verás que son valores perdidos. Eso ocurre porque la función `mean()`no tolera los valores perdidos por defecto. Usa `?mean`para averiguar cual es la manera de que haga la media ignorando los valores perdidos. 
+
+```{r}
+# solution
+df <- df %>% mutate(happy_scaled = scale(happy), 
+                            health_centered = health - mean(health, na.rm=TRUE))
+
+
+```
+
+No te quedes aquí. Averigua todo lo que puedas de los usos de `mutate()` y de `select()`. Por ejemplo, prueba a cargar el paquete `MASS` y tratar de hacer un select. Verás que posiblemente te genere un error debido a que existe una función igual a `select()` en `MASS`. Será buena idea especificar el paquete del que quieres usar 'select()`, por ejemplo: `dplyr::select()`. Para poder seguir sin tener que especificar el paquete, podemos ejecutar esto `unloadNamespace("MASS")` para que `MASS` no sea un incordio.  
+
+Además, a la hora de seleccionar columnas, tienes muchas opciones. Como ejemplos:
+
+```{r}
+library(MASS)
+# des-seleccionar usando el "-"
+df_sin_happy <- df %>% dplyr::select(-happy)
+
+# seleccionar usando funciones de ayuda como 
+# contains("contiene_esto_en_su_nombre")
+# starts_with("empieza_por")
+# https://dplyr.tidyverse.org/reference/select.html
+# esta línea seleccionará todas las columnas que contengan en su nombre "net"... que en una búsqueda rápida parece una palabra que se repite 
+df_net <- df %>% dplyr::select(contains("net"))
+df_trs <- df %>% dplyr:: select(starts_with("trs"))
+# o por sus indices 
+df_1_3 <- df %>% dplyr:: select(1:3)
+
+write.csv(df, "datos_ess.csv")
+```
+## Función `group_by`
+
+Una vez que tenemos nuestro dataset correcto, es la hora de querer conocer cosas sobre los diferentes grupos presentes. En nuestro caso tenemos género y país. Queremos saber 
+- De media, qué país muestra mejor salud 
+- De media, qué género muestra mayor bienestar
+- Qué porcentaje de mujeres hay en cada país
+
+Para ello necesitamos la función `group_by()`. Esta función de por sí, no tendra ningún efecto aparente. 
+```{r}
+
+df_country <- df %>% group_by(country)
+
+df_gender <- df %>% group_by(gender)
+
+```
+
+Sin embargo ha cambiado la forma en que se estructura el dataset. Al hacer el `glimpse()` veréis que os informa de las agrupaciones.
+
+```{r}
+df_country %>% glimpse
+df_gender %>% glimpse
+df %>% glimpse
+
+```
+Ahora, toda operacion de `summarise()` se hará sobre los grupos, que podemos comparar con la media de toda la muestra para la variable escogida. 
+```{r}
+
+df_country %>% summarise(health_mean =mean(health, na.rm = TRUE))
+
+df %>% summarise(health_mean = mean(health, na.rm = TRUE))
+
+df_gender %>% summarise(happy_mean =mean(happy, na.rm = TRUE))
+
+df %>% summarise(happy_mean = mean(happy, na.rm = TRUE))
+
+```
+Ahora es tu turno de comparar el efecto de hacer agrupaciones según varias variables. 
+
+```{r}
+
+```
+
+Ahora hay que introducir una función que solo puede usarse dentro de `summarise()` y es `n()`. Esta función nos sirve para contar ocurrencias de grupos. 
+
+```{r}
+
+
+```
+
+A continuación verás el uso de diferentes funciones. 
+La primera `group_by()`, después de `summarise()` junto con `n()`. Al final creamos una nueva variable con `mutate()` donde calculamos la frecuencia relativa.   
+```{r}
+
+```
+
+Calcula tú mismo qué porcentaje de mujeres hay en cada país
+
+```{r}
+
+
+```
+
+
+## Tablas de contingencia utilizando datos de ESS
+
+Antes que nada podemos instalar el paquete que nos da un poco más de información sobre nuestro dataframe
+
+```{r}
+df <- ESS10 %>% 
+  dplyr::select(country = cntry, gender = gndr, health, happy, id= idno,news=nwspol, internet=netusoft,polintr,cptppola,trstplt,trstprt, trstsci,
+                 vote, trstprl,lrscale,stfdem,stfhlth,stfedu,freehms, 
+                 hmsacld,atcherp,agea, education=edulvlb, unemployd = uempla,
+                 partnr_educ=edulvlpb,)
+```
+
+
+```{r}
+#install.packages("psych")
+library(psych)
+describe(df)
+class(df$gender)
+class(df$polintr)
+table(df$gender)
+table(df$polintr)
+```
+Podemos extraer tablas sencillas con una sola variable. 
+```{r}
+table <- table(df$gender,df$polintr)
+#Una forma clásica de realizar tablas sencillas
+```
+También podemos plotear sencillamente la data para ir conociéndola
+```{r}
+df %>%
+  ggplot(aes(x = polintr)) +
+  geom_bar()
+# Cambiar las variables a gusto para ir viendo cómo se van distribuyendo y sus particularidades
+```
+
+
+```{r}
+df$polintr<- factor(df$polintr, #objeto
+                                  levels = c(1,2,3,4),  #valores o niveles numéricos
+                                  labels = c("Muy interesado", "Interesado", "Poco interesado", "Nada interesado"), 
+                    exclude = NA) #significados de cada valor numérico
+                    
+
+```
+
+```{r}
+df %>% #selección de data frame
+  ggplot(aes(polintr, fill = as.factor(gender))) + #definir el tamaño del lienzo
+  geom_bar() + #definir el tipo de gráfica de los datos
+  labs(title = "Interés por la política de acuerdo al género", #texto de la gráfica
+       x = "Interés",
+       y = "Género")
+```
+
+Qué ha ocurrido? Se nos ha olvidado convertir en factor la variable género también, de ahí que salga el valor numérico asignado
+
+```{r}
+df$gender<- factor(df$gender, #objeto
+                                  levels = c(1,2),  #valores o niveles numéricos
+                                  labels = c("hombre", "mujer")
+                   ) #significados de cada valor numérico
+        
+```
+
+Ahora repetimos el gráfico a ver qué tal:
+```{r}
+df %>% #selección de data frame
+  drop_na(polintr, gender) %>% #remover los casos "perdidos"
+  ggplot(aes(polintr, fill = gender)) + #definir el tamaño del lienzo
+  geom_bar() + #definir el tipo de gráfica de los datos
+  labs(title = "Interés por la política según género", #texto de la gráfica
+       x = "Interés",
+       y = "Encuestados por género")
+```
+
+## Tablas de contingencia y pruebas de independencia
+
+```{r}
+tabla_abs<-table(df$polintr, df$gender) #formato de variables (y - renglón, x - columna)
+tabla_abs
+```
+
+Tabla de contingencia con proporciones totales:
+```{r}
+round(prop.table(tabla_abs), 2) #proporciones totales reducidas a 2 decimales
+
+```
+
+Tabla de contingencia con proporciones condicionales por fila:
+```{r}
+round(prop.table(tabla_abs, 1), 2) #proporciones por fila reducida a 2 decimales
+
+```
+
+Tabla de contingencia con proporciones condicionales por columna:
+```{r}
+round(prop.table(tabla_abs, 2), 2) #proporciones por columna reducida a 2 decimales
+```
+
+```{r}
+#Tabla de contingencia con sumas absolutas en los marginales:
+addmargins(tabla_abs, c(1, 2))
+```
+
+Tabla de contingencia con sumas de proporciones en los marginales:
+```{r}
+round(addmargins(prop.table(tabla_abs), c(1, 2)), 2)
+```
+
+### Tablas de frecuencias y de contingencia con librería `descr`
+
+La librería `descr` contiene algunas funciones o códigos que también permiten generar tablas de frecuencias así como tablas de contingencia. La diferencia respecto de los scripts del sistema base radican en el formato de salida que arroja y en la posibilidad de generar gráficos de barras acumuladas, de manera automática.
+
+En el caso de las tablas de frecuencias, el script para solicitarlas para una variable es `freq()`, y tiene la siguiente estructura: `freq(x, w, user.missing = , plot = , …)`, donde:
+
+   `x =` la variable factor de la que se desea conocer sus frecuencias,
+    `w =` un vector adicional para ponderar la tabla de frecuencias,
+    `user.missing =` vector de caracteres que indica cuáles son los niveles que deben se tratados como valores perdidos al calcular los porcentajes válidos, y estos no son representados en la gráfica de barras acumuladas.
+    `plot =` valor lógico (TRUE es el valor por default) que indica si se debe generar el gráfico de frecuencias
+    `… =` argumentos adicionales que se adjuntan a la gráfica de frecuencias en caso de que `plot = TRUE`.
+
+En el caso del ejemplo realizado hasta el momento basado en la variable `gender`, se pueden solicitar las distribuciones de frecuencias absolutas y relativas (porcentajes) para cada una de la siguiente manera:
+
+```{r}
+#install.packages("descr")
+#library(descr)
+descr::freq(df$gender, plot = FALSE)
+```
+
+En caso de necesitar la versión gráfica para la representación de estos datos, se activa la opción de gráfica:
+```{r}
+descr::freq(df$gender, plot = TRUE)
+```
+
+Por otra parte, se puede solicitar una tabla de contingencia (o tabla cruzada) para conocer la asociación existente entre dos variables a partir de la función `crosstab()`.
+
+Siguiendo el ejemplo de arriba en donde se evalúa la asociación existente entre la variable de `gender` dependiente de la variable `polintr`, se realiza la siguiente tabla de contingencia:
+
+```{r}
+#descr::crosstab(df$gender, df$polintr,
+ #        expected = TRUE,
+  #       prop.c = TRUE,
+   #      prop.t = TRUE,
+    #     resid = TRUE,
+     #    format = "SPSS",
+      #   percent = TRUE,
+       #  main = "Asociación entre interés por la política y género",
+        # xlab = "Interés por la política",
+        #ylab = "Género",
+        # plot = TRUE)
+```
+
+```{r}
+#chisq.test(tabla_abs)
+```
+
+Añadiendo el `chi.sq()` de `descr()`
+
+```{r}
+#descr::crosstab(df$gender, df$polintr,
+ #        expected = TRUE,
+  #       prop.c = TRUE,
+   #      prop.t = TRUE,
+    #     resid = TRUE,
+    #     chisq = TRUE,
+    #     format = "SPSS",
+    #     percent = TRUE,
+    #     main = "Asociación entre interés por la política y género",
+    #     xlab = "Interés por la política",
+    #     ylab = "Género",
+    #     plot = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
